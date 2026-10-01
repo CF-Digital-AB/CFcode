@@ -64,9 +64,28 @@ function deriveInstanceId(driver: ProviderDriverKind, label: string): string {
 }
 
 const INSTANCE_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9_-]*$/;
+const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 const DEFAULT_DRIVER_OPTION = DRIVER_OPTIONS[0]!;
 const EMPTY_CONFIG_DRAFT: Record<string, unknown> = {};
+
+function defaultApiKeyEnvironmentVariable(config: Record<string, unknown>): string {
+  const configured =
+    typeof config.apiKeyEnvironmentVariable === "string"
+      ? config.apiKeyEnvironmentVariable.trim()
+      : "";
+  if (configured) return configured;
+  switch (config.apiProvider) {
+    case "zai-coding-global":
+      return "ZAI_API_KEY";
+    case "deepseek":
+      return "DEEPSEEK_API_KEY";
+    case "custom":
+      return "API_KEY";
+    default:
+      return "";
+  }
+}
 interface ComingSoonDriverOption {
   readonly value: ProviderDriverKind;
   readonly label: string;
@@ -136,6 +155,7 @@ export function AddProviderInstanceDialog({
   // Driver-specific config drafts keyed by driver so toggling between drivers
   // during the same dialog session does not lose in-progress input.
   const [configByDriver, setConfigByDriver] = useState<Record<string, Record<string, unknown>>>({});
+  const [apiKeyByDriver, setApiKeyByDriver] = useState<Record<string, string>>({});
   // Errors are suppressed until the user has tried to submit once. After that
   // they update live so fixing the problem clears the message in place.
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
@@ -194,6 +214,41 @@ export function AddProviderInstanceDialog({
         : (configByDriver[driver] ?? {});
     const hasConfig = Object.keys(config).length > 0;
     const normalizedAccentColor = normalizeProviderAccentColor(accentColor);
+    const apiKey = driver === "opencode" ? apiKeyByDriver[driver]?.trim() : undefined;
+    const apiKeyEnvironmentVariable = defaultApiKeyEnvironmentVariable(config).trim();
+    const apiProfileSelected =
+      driver === "opencode" &&
+      typeof config.apiProvider === "string" &&
+      config.apiProvider !== "none";
+    if (apiProfileSelected && !apiKey) {
+      toastManager.add({
+        type: "error",
+        title: "API key required",
+        description: "Enter the API key for the selected OpenCode API provider.",
+      });
+      return;
+    }
+    const customApiDetailsMissing =
+      typeof config.apiBaseUrl !== "string" ||
+      config.apiBaseUrl.trim().length === 0 ||
+      typeof config.apiModel !== "string" ||
+      config.apiModel.trim().length === 0;
+    if (apiProfileSelected && config.apiProvider === "custom" && customApiDetailsMissing) {
+      toastManager.add({
+        type: "error",
+        title: "Custom API details required",
+        description: "Enter a base URL and model for the custom OpenAI-compatible API.",
+      });
+      return;
+    }
+    if (apiKey && !ENVIRONMENT_VARIABLE_NAME_PATTERN.test(apiKeyEnvironmentVariable)) {
+      toastManager.add({
+        type: "error",
+        title: "Invalid API key variable",
+        description: "Use a shell environment variable name such as DEEPSEEK_API_KEY.",
+      });
+      return;
+    }
 
     const nextInstance: ProviderInstanceConfig = {
       driver,
@@ -201,6 +256,13 @@ export function AddProviderInstanceDialog({
       ...(label.trim().length > 0 ? { displayName: label.trim() } : {}),
       ...(normalizedAccentColor ? { accentColor: normalizedAccentColor } : {}),
       ...(hasConfig ? { config } : {}),
+      ...(apiKey && apiKeyEnvironmentVariable
+        ? {
+            environment: [
+              { name: apiKeyEnvironmentVariable, value: apiKey, sensitive: true },
+            ],
+          }
+        : {}),
     };
     // `ProviderInstanceId.make` revalidates the slug; we've already checked
     // it via `validateInstanceId`, but going through the brand constructor
@@ -398,6 +460,29 @@ export function AddProviderInstanceDialog({
                 variant="dialog"
                 onChange={setConfigDraft}
               />
+              {driver === "opencode" &&
+              typeof configDraft.apiProvider === "string" &&
+              configDraft.apiProvider !== "none" ? (
+                <label className="grid gap-2">
+                  <span className="text-xs font-medium text-foreground">API key</span>
+                  <Input
+                    type="password"
+                    autoComplete="off"
+                    value={apiKeyByDriver[driver] ?? ""}
+                    onChange={(event) =>
+                      setApiKeyByDriver((current) => ({
+                        ...current,
+                        [driver]: event.target.value,
+                      }))
+                    }
+                    placeholder="Required for the selected API provider"
+                  />
+                  <span className="text-2xs text-muted-foreground">
+                    Stored separately from provider settings. The key is sent only to the selected
+                    environment.
+                  </span>
+                </label>
+              ) : null}
             </div>
           ) : wizardStep === 2 ? (
             <div className="grid gap-2">

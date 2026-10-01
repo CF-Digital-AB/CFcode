@@ -46,6 +46,10 @@ import {
 import { withInstanceIdentity } from "./instanceIdentity.ts";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
 import {
+  buildOpenCodeApiConfigContent,
+  resolveOpenCodeApiProvider,
+} from "../openCodeApiProvider.ts";
+import {
   enrichProviderSnapshotWithVersionAdvisory,
   makeCachedProviderMaintenanceResolution,
   makePackageManagedProviderMaintenanceResolver,
@@ -108,7 +112,19 @@ export const OpenCodeDriver: ProviderDriver<OpenCodeSettings, OpenCodeDriverEnv>
       const httpClient = yield* HttpClient.HttpClient;
       const serverSettings = yield* ServerSettingsService;
       const eventLoggers = yield* ProviderEventLoggers;
-      const processEnv = mergeProviderInstanceEnvironment(environment);
+      const processEnvironment = mergeProviderInstanceEnvironment(environment);
+      const apiProvider = resolveOpenCodeApiProvider(config);
+      const processEnv = {
+        ...processEnvironment,
+        ...(apiProvider
+          ? {
+              OPENCODE_CONFIG_CONTENT: buildOpenCodeApiConfigContent(
+                config,
+                processEnvironment.OPENCODE_CONFIG_CONTENT,
+              ),
+            }
+          : {}),
+      };
       const continuationIdentity = defaultProviderContinuationIdentity({
         driverKind: DRIVER_KIND,
         instanceId,

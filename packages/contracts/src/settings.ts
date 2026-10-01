@@ -859,7 +859,7 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
       Schema.withDecodingDefault(Effect.succeed("")),
       Schema.annotateKey({
         title: "Server URL",
-        description: "Leave blank to let T3 Code spawn the server when needed.",
+        description: "Leave blank to let CF Code spawn the server when needed.",
         providerSettingsForm: {
           placeholder: "http://127.0.0.1:4096",
           clearWhenEmpty: "omit",
@@ -878,13 +878,72 @@ export const OpenCodeSettings = makeProviderSettingsSchema(
         },
       }),
     ),
+    apiProvider: Schema.Literals(["none", "zai-coding-global", "deepseek", "custom"]).pipe(
+      Schema.withDecodingDefault(Effect.succeed("none" as const)),
+      Schema.annotateKey({
+        title: "API provider",
+        description:
+          "Use a hosted OpenAI-compatible coding API through OpenCode. Leave disabled to use OpenCode's normal provider setup.",
+        providerSettingsForm: {
+          control: "select",
+          options: [
+            { value: "none", label: "OpenCode configuration" },
+            { value: "zai-coding-global", label: "Z.ai Coding Plan Global" },
+            { value: "deepseek", label: "DeepSeek" },
+            { value: "custom", label: "Custom OpenAI-compatible API" },
+          ],
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    apiBaseUrl: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "API base URL",
+        description: "Required for custom providers; presets fill this automatically.",
+        providerSettingsForm: {
+          placeholder: "https://api.example.com/v1",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    apiModel: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "API model",
+        description: "Optional preset override; custom providers require a model ID.",
+        providerSettingsForm: {
+          placeholder: "deepseek-chat or glm-4.5",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
+    apiKeyEnvironmentVariable: TrimmedString.pipe(
+      Schema.withDecodingDefault(Effect.succeed("")),
+      Schema.annotateKey({
+        title: "API key environment variable",
+        description: "The secret is stored separately and injected into this variable at runtime.",
+        providerSettingsForm: {
+          placeholder: "DEEPSEEK_API_KEY",
+          clearWhenEmpty: "omit",
+        },
+      }),
+    ),
     customModels: Schema.Array(CustomModelSetting).pipe(
       Schema.withDecodingDefault(Effect.succeed([])),
       Schema.annotateKey({ providerSettingsForm: { hidden: true } }),
     ),
   },
   {
-    order: ["binaryPath", "serverUrl", "serverPassword"],
+    order: [
+      "binaryPath",
+      "serverUrl",
+      "serverPassword",
+      "apiProvider",
+      "apiBaseUrl",
+      "apiModel",
+      "apiKeyEnvironmentVariable",
+    ],
   },
 );
 export type OpenCodeSettings = typeof OpenCodeSettings.Type;
@@ -1458,6 +1517,12 @@ const OpenCodeSettingsPatch = Schema.Struct({
   binaryPath: Schema.optionalKey(TrimmedString),
   serverUrl: Schema.optionalKey(TrimmedString),
   serverPassword: Schema.optionalKey(TrimmedString),
+  apiProvider: Schema.optionalKey(
+    Schema.Literals(["none", "zai-coding-global", "deepseek", "custom"]),
+  ),
+  apiBaseUrl: Schema.optionalKey(TrimmedString),
+  apiModel: Schema.optionalKey(TrimmedString),
+  apiKeyEnvironmentVariable: Schema.optionalKey(TrimmedString),
   customModels: Schema.optionalKey(Schema.Array(CustomModelSetting)),
 });
 

@@ -61,6 +61,26 @@ import {
 
 const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
+function defaultApiKeyEnvironmentVariable(config: unknown): string {
+  if (config === null || typeof config !== "object") return "";
+  const values = config as Record<string, unknown>;
+  const configured =
+    typeof values.apiKeyEnvironmentVariable === "string"
+      ? values.apiKeyEnvironmentVariable.trim()
+      : "";
+  if (configured) return configured;
+  switch (values.apiProvider) {
+    case "zai-coding-global":
+      return "ZAI_API_KEY";
+    case "deepseek":
+      return "DEEPSEEK_API_KEY";
+    case "custom":
+      return "API_KEY";
+    default:
+      return "";
+  }
+}
+
 function ProviderStatusDiagnostic({
   detail,
   children,
@@ -539,10 +559,25 @@ export function ProviderInstanceCard({
 
   const updateConfig = (nextConfig: Record<string, unknown> | undefined) => {
     const { config: _omit, ...rest } = instance;
+    const previousApiKeyEnvironmentVariable =
+      instance.driver === "opencode" ? defaultApiKeyEnvironmentVariable(instance.config) : "";
+    const nextApiKeyEnvironmentVariable =
+      instance.driver === "opencode" ? defaultApiKeyEnvironmentVariable(nextConfig) : "";
+    const environment =
+      previousApiKeyEnvironmentVariable.length > 0 &&
+      previousApiKeyEnvironmentVariable !== nextApiKeyEnvironmentVariable
+        ? (instance.environment ?? []).filter(
+            (variable) => variable.name !== previousApiKeyEnvironmentVariable,
+          )
+        : instance.environment;
+    const base = nextConfig !== undefined ? { ...rest, config: nextConfig } : rest;
     onUpdate(
-      nextConfig !== undefined
-        ? ({ ...rest, config: nextConfig } as ProviderInstanceConfig)
-        : (rest as ProviderInstanceConfig),
+      environment === undefined || environment.length > 0
+        ? ({
+            ...base,
+            ...(environment === undefined ? {} : { environment }),
+          } as ProviderInstanceConfig)
+        : (base as ProviderInstanceConfig),
     );
   };
 
@@ -565,6 +600,32 @@ export function ProviderInstanceCard({
         : (rest as ProviderInstanceConfig),
     );
   };
+
+  const apiKeyEnvironmentVariable =
+    instance.driver === "opencode" ? defaultApiKeyEnvironmentVariable(instance.config) : "";
+  const updateApiKey = (value: string) => {
+    if (!apiKeyEnvironmentVariable || value.trim().length === 0) return;
+    const next = [...(instance.environment ?? [])];
+    const index = next.findIndex((variable) => variable.name === apiKeyEnvironmentVariable);
+    const variable = { name: apiKeyEnvironmentVariable, value, sensitive: true } as const;
+    if (index === -1) next.push(variable);
+    else next[index] = variable;
+    updateEnvironment(next);
+  };
+  const clearApiKey = () => {
+    if (!apiKeyEnvironmentVariable) return;
+    updateEnvironment(
+      (instance.environment ?? []).filter(
+        (variable) => variable.name !== apiKeyEnvironmentVariable,
+      ),
+    );
+  };
+  const hasStoredApiKey = Boolean(
+    apiKeyEnvironmentVariable &&
+      instance.environment?.some(
+        (variable) => variable.name === apiKeyEnvironmentVariable && variable.valueRedacted,
+      ),
+  );
 
   const titleIconNode = driverKind ? (
     <ProviderInstanceIcon
@@ -925,6 +986,48 @@ export function ProviderInstanceCard({
       </SettingsSection>
 
       {setup ? <SettingsSection title="Setup">{setup}</SettingsSection> : null}
+
+      {instance.driver === "opencode" &&
+      typeof instance.config === "object" &&
+      instance.config !== null &&
+      (instance.config as Record<string, unknown>).apiProvider !== undefined &&
+      (instance.config as Record<string, unknown>).apiProvider !== "none" ? (
+        <SettingsSection
+          title="API provider"
+          inert={readOnly}
+          aria-disabled={readOnly || undefined}
+          className={readOnly ? "opacity-50 select-none" : undefined}
+        >
+          <SettingsRow
+            title="API key"
+            description={
+              apiKeyEnvironmentVariable
+                ? `Stored separately as ${apiKeyEnvironmentVariable}.`
+                : "Select an API provider and key variable first."
+            }
+            control={
+              <div className="flex w-full min-w-0 items-center gap-2 @min-[32rem]/settings-row:w-auto">
+                <DraftInput
+                  size="sm"
+                  className="min-w-0 flex-1 @min-[32rem]/settings-row:w-64"
+                  type="password"
+                  value=""
+                  onCommit={updateApiKey}
+                  placeholder={hasStoredApiKey ? "Stored secret, enter a new value" : "API key"}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label="Provider API key"
+                />
+                {hasStoredApiKey ? (
+                  <Button type="button" size="xs" variant="ghost-destructive" onClick={clearApiKey}>
+                    Clear
+                  </Button>
+                ) : null}
+              </div>
+            }
+          />
+        </SettingsSection>
+      ) : null}
 
       {instance.driver === "codex" && readCodexSetupMode(instance.config) === "managed" ? (
         <div
