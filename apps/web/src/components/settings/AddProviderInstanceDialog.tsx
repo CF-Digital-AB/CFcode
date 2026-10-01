@@ -1,7 +1,7 @@
 "use client";
 
 import { Radio as RadioPrimitive } from "@base-ui/react/radio";
-import { CheckIcon } from "lucide-react";
+import { CheckIcon, KeyRoundIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import {
   ProviderInstanceId,
@@ -15,7 +15,14 @@ import { cn } from "../../lib/utils";
 import { normalizeProviderAccentColor } from "../../providerInstances";
 import { Button } from "../ui/button";
 import { ChatGptConnectionButton } from "./ChatGptConnectionButton";
-import { ACPRegistryIcon, Gemini, GithubCopilotIcon, PiAgentIcon, type Icon } from "../Icons";
+import {
+  ACPRegistryIcon,
+  Gemini,
+  GithubCopilotIcon,
+  OpenCodeIcon,
+  PiAgentIcon,
+  type Icon,
+} from "../Icons";
 import { Dialog } from "../ui/dialog";
 import { Badge } from "../ui/badge";
 import { Input } from "../ui/input";
@@ -68,6 +75,20 @@ const ENVIRONMENT_VARIABLE_NAME_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 const DEFAULT_DRIVER_KIND = ProviderDriverKind.make("codex");
 const DEFAULT_DRIVER_OPTION = DRIVER_OPTIONS[0]!;
 const EMPTY_CONFIG_DRAFT: Record<string, unknown> = {};
+
+export const QUICK_API_PROVIDER_OPTIONS = [
+  {
+    id: "zai-coding-global",
+    label: "Z.ai Coding Plan Global",
+    description: "GLM-4.5 via Z.ai",
+  },
+  {
+    id: "deepseek",
+    label: "DeepSeek API",
+    description: "DeepSeek Chat API",
+  },
+] as const;
+export type QuickApiProvider = (typeof QUICK_API_PROVIDER_OPTIONS)[number]["id"];
 
 function defaultApiKeyEnvironmentVariable(config: Record<string, unknown>): string {
   const configured =
@@ -134,6 +155,7 @@ interface AddProviderInstanceDialogProps {
   readonly open: boolean;
   readonly environmentId: EnvironmentId;
   readonly environmentLabel: string;
+  readonly initialApiProvider?: QuickApiProvider | undefined;
   readonly onOpenChange: (open: boolean) => void;
 }
 
@@ -141,21 +163,34 @@ export function AddProviderInstanceDialog({
   open,
   environmentId,
   environmentLabel,
+  initialApiProvider,
   onOpenChange,
 }: AddProviderInstanceDialogProps) {
   const settings = useEnvironmentSettings(environmentId);
   const updateSettings = useUpdateEnvironmentSettings(environmentId);
+  const initialQuickApiOption =
+    initialApiProvider === undefined
+      ? undefined
+      : QUICK_API_PROVIDER_OPTIONS.find((option) => option.id === initialApiProvider);
+  const initialDriver = initialQuickApiOption
+    ? ProviderDriverKind.make("opencode")
+    : DEFAULT_DRIVER_KIND;
 
-  const [wizardStep, setWizardStep] = useState(0);
+  const [wizardStep, setWizardStep] = useState(initialQuickApiOption ? 2 : 0);
   const [addingChatGptAccount, setAddingChatGptAccount] = useState(false);
-  const [driver, setDriver] = useState<ProviderDriverKind>(DEFAULT_DRIVER_KIND);
-  const [label, setLabel] = useState("");
+  const [driver, setDriver] = useState<ProviderDriverKind>(initialDriver);
+  const [label, setLabel] = useState(initialQuickApiOption?.label ?? "");
   const [accentColor, setAccentColor] = useState<string>("");
   const [instanceIdOverride, setInstanceIdOverride] = useState<string | null>(null);
   // Driver-specific config drafts keyed by driver so toggling between drivers
   // during the same dialog session does not lose in-progress input.
-  const [configByDriver, setConfigByDriver] = useState<Record<string, Record<string, unknown>>>({});
-  const [apiKeyByDriver, setApiKeyByDriver] = useState<Record<string, string>>({});
+  const [configByDriver, setConfigByDriver] = useState<Record<string, Record<string, unknown>>>(
+    () =>
+      initialQuickApiOption ? { [initialDriver]: { apiProvider: initialQuickApiOption.id } } : {},
+  );
+  const [apiKeyByDriver, setApiKeyByDriver] = useState<Record<string, string>>(() =>
+    initialQuickApiOption ? { [initialDriver]: "" } : {},
+  );
   // Errors are suppressed until the user has tried to submit once. After that
   // they update live so fixing the problem clears the message in place.
   const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
@@ -187,6 +222,24 @@ export function AddProviderInstanceDialog({
       }
       return next;
     });
+  };
+
+  const startQuickApiProviderSetup = (apiProvider: QuickApiProvider) => {
+    const nextDriver = ProviderDriverKind.make("opencode");
+    const option = QUICK_API_PROVIDER_OPTIONS.find((item) => item.id === apiProvider)!;
+    setDriver(nextDriver);
+    setLabel(option.label);
+    setInstanceIdOverride(null);
+    setConfigByDriver((existing) => ({
+      ...existing,
+      [nextDriver]: {
+        ...(existing[nextDriver] ?? {}),
+        apiProvider,
+      },
+    }));
+    setApiKeyByDriver((existing) => ({ ...existing, [nextDriver]: "" }));
+    setHasAttemptedSubmit(false);
+    setWizardStep(2);
   };
 
   const applyWizardNavigation = (navigation: WizardNavigation) => {
@@ -258,9 +311,7 @@ export function AddProviderInstanceDialog({
       ...(hasConfig ? { config } : {}),
       ...(apiKey && apiKeyEnvironmentVariable
         ? {
-            environment: [
-              { name: apiKeyEnvironmentVariable, value: apiKey, sensitive: true },
-            ],
+            environment: [{ name: apiKeyEnvironmentVariable, value: apiKey, sensitive: true }],
           }
         : {}),
     };
@@ -316,6 +367,38 @@ export function AddProviderInstanceDialog({
 
         <WizardPanel>
           <div className={cn("grid gap-2", wizardStep !== 0 && "hidden")}>
+            <div className="grid gap-2">
+              <div className="text-sm font-medium text-foreground">Hosted API</div>
+              <p className="text-2xs text-muted-foreground">
+                Add a Z.ai or DeepSeek API key directly. CF Code configures OpenCode for you.
+              </p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {QUICK_API_PROVIDER_OPTIONS.map((option) => (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className="flex cursor-pointer items-center gap-3 rounded-lg bg-card px-3 py-3 text-left text-muted-foreground outline-none ring-1 ring-black/5 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring dark:bg-white/3 dark:ring-white/5 dark:hover:bg-white/5"
+                    onClick={() => startQuickApiProviderSetup(option.id)}
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary/10 text-primary">
+                      <KeyRoundIcon className="size-4" aria-hidden />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-foreground">
+                        {option.label}
+                      </span>
+                      <span className="block truncate text-2xs text-muted-foreground">
+                        {option.description}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 pt-1 text-2xs text-muted-foreground">
+                <OpenCodeIcon className="size-3.5 shrink-0" aria-hidden />
+                <span>For other OpenCode setups, use the driver below.</span>
+              </div>
+            </div>
             <div id="add-instance-driver-label" className="text-sm font-medium text-foreground">
               Driver
             </div>

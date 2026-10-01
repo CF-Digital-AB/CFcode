@@ -14,9 +14,11 @@ export function resolveDesktopBaseDir(input: {
   readonly homeDirectory: string;
   readonly joinPath: JoinPath;
   readonly t3Home: Option.Option<string>;
+  /** Default storage root for this desktop product when no override is set. */
+  readonly defaultDirectoryName?: string;
 }): string {
   return Option.getOrElse(normalizeConfiguredBaseDir(input.t3Home), () =>
-    input.joinPath(input.homeDirectory, ".t3"),
+    input.joinPath(input.homeDirectory, input.defaultDirectoryName ?? ".t3"),
   );
 }
 

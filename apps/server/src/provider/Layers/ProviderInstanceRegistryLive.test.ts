@@ -142,6 +142,10 @@ const makeOpenCodeConfig = (overrides: Partial<OpenCodeSettings>): OpenCodeSetti
   binaryPath: "opencode",
   serverUrl: "",
   serverPassword: "",
+  apiProvider: "none",
+  apiBaseUrl: "",
+  apiModel: "",
+  apiKeyEnvironmentVariable: "",
   customModels: [],
   ...overrides,
 });

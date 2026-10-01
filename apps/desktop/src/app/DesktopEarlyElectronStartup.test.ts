@@ -82,8 +82,8 @@ describe("DesktopEarlyElectronStartup", () => {
 
     assert.deepEqual(options, {
       isDevelopment: true,
-      linuxWmClass: "t3code-dev",
-      linuxDesktopEntryName: "com.t3tools.T3Code.Development.desktop",
+      linuxWmClass: "cfcode-dev",
+      linuxDesktopEntryName: "com.cfdigital.CFCode.Development.desktop",
       passwordStore: "gnome-libsecret",
     });
   });
@@ -97,6 +97,20 @@ describe("DesktopEarlyElectronStartup", () => {
       joinPath,
       readFileString: (path) => {
         assert.equal(path, "/home/user/.t3/dev/desktop-settings.json");
+        return JSON.stringify({ linuxPasswordStore: "kwallet" });
+      },
+    });
+
+    assert.equal(preference, "kwallet");
+  });
+
+  it("keeps implicit production state under ~/.cfcode/userdata", () => {
+    const preference = resolveEarlyLinuxPasswordStorePreference({
+      env: {},
+      homeDirectory: "/home/user",
+      joinPath,
+      readFileString: (path) => {
+        assert.equal(path, "/home/user/.cfcode/userdata/desktop-settings.json");
         return JSON.stringify({ linuxPasswordStore: "kwallet" });
       },
     });

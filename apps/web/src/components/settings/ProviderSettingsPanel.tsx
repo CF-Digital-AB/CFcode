@@ -26,7 +26,7 @@ import * as Arr from "effect/Array";
 import * as Duration from "effect/Duration";
 import * as Equal from "effect/Equal";
 import * as Result from "effect/Result";
-import { PlusIcon } from "lucide-react";
+import { KeyRoundIcon, PlusIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { isDesktopLocalConnectionTarget } from "../../connection/desktopLocal";
@@ -79,7 +79,11 @@ import { ScrollArea } from "../ui/scroll-area";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import { stackedThreadToast, toastManager } from "../ui/toast";
-import { AddProviderInstanceDialog } from "./AddProviderInstanceDialog";
+import {
+  AddProviderInstanceDialog,
+  QUICK_API_PROVIDER_OPTIONS,
+  type QuickApiProvider,
+} from "./AddProviderInstanceDialog";
 import { ExpandableText } from "./ExpandableText";
 import { ProviderInstanceCard } from "./ProviderInstanceCard";
 import { UsageProviderSettings } from "./UsageProviderSettings";
@@ -607,6 +611,7 @@ export function EnvironmentProviderSettings({
   });
   const [isRefreshingProviders, setIsRefreshingProviders] = useState(false);
   const [isAddInstanceDialogOpen, setIsAddInstanceDialogOpen] = useState(false);
+  const [initialApiProvider, setInitialApiProvider] = useState<QuickApiProvider | undefined>();
   const [selectedInstanceId, setSelectedInstanceId] = useState<ProviderInstanceId | null>(
     targetInstanceId ?? null,
   );
@@ -615,6 +620,15 @@ export function EnvironmentProviderSettings({
   >(() => new Set());
   const refreshingRef = useRef(false);
   const updatingInstanceIdsRef = useRef<Set<ProviderInstanceId>>(new Set());
+
+  const openAddProviderDialog = (apiProvider?: QuickApiProvider) => {
+    setInitialApiProvider(apiProvider);
+    setIsAddInstanceDialogOpen(true);
+  };
+  const handleAddProviderDialogOpenChange = (open: boolean) => {
+    setIsAddInstanceDialogOpen(open);
+    if (!open) setInitialApiProvider(undefined);
+  };
 
   const providerUpdateCandidateByInstanceId = useMemo(
     () =>
@@ -1101,14 +1115,14 @@ export function EnvironmentProviderSettings({
                       <Button
                         size="icon-xs"
                         variant="ghost-muted"
-                        onClick={() => setIsAddInstanceDialogOpen(true)}
+                        onClick={() => openAddProviderDialog()}
                         aria-label="Add provider"
                       >
                         <PlusIcon />
                       </Button>
                     }
                   />
-                  <TooltipPopup side="top">Add provider</TooltipPopup>
+                  <TooltipPopup side="top">Add provider or hosted API</TooltipPopup>
                 </Tooltip>
               </>
             )}
@@ -1117,6 +1131,29 @@ export function EnvironmentProviderSettings({
       >
         {deviceTabs ? (
           <div className="flex min-h-11 min-w-0 items-center gap-2 px-3 sm:px-4">{deviceTabs}</div>
+        ) : null}
+        {!readOnly ? (
+          <div className="mx-3 mt-3 grid gap-2 rounded-lg bg-muted/30 p-3 ring-1 ring-border/60 sm:mx-4">
+            <div>
+              <div className="text-sm font-medium text-foreground">Hosted API providers</div>
+              <p className="text-2xs text-muted-foreground">
+                Add a Z.ai or DeepSeek API key directly. CF Code configures OpenCode for you.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_API_PROVIDER_OPTIONS.map((option) => (
+                <Button
+                  key={option.id}
+                  size="sm"
+                  variant="outline"
+                  onClick={() => openAddProviderDialog(option.id)}
+                >
+                  <KeyRoundIcon className="size-3.5" aria-hidden />
+                  {option.label}
+                </Button>
+              ))}
+            </div>
+          </div>
         ) : null}
         {readOnly ? (
           <SettingsGroup divided={false} className="overflow-hidden">
@@ -1248,7 +1285,8 @@ export function EnvironmentProviderSettings({
           open
           environmentId={environmentId}
           environmentLabel={environmentLabel}
-          onOpenChange={setIsAddInstanceDialogOpen}
+          initialApiProvider={initialApiProvider}
+          onOpenChange={handleAddProviderDialogOpenChange}
         />
       ) : null}
     </>

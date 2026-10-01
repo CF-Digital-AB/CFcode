@@ -73,7 +73,7 @@ import { buildProviderInstanceUpdatePatch } from "../settings/SettingsPanels.log
 import { TerminalViewport } from "../ThreadTerminalDrawer";
 import { CloudEnvironmentConnectRows } from "../cloud/CloudEnvironmentConnectList";
 import { ClaudeAI, OpenAI } from "../Icons";
-import { T3Wordmark } from "../T3Wordmark";
+import { CFWordmark } from "../T3Wordmark";
 import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Collapsible, CollapsiblePanel, CollapsibleTrigger } from "../ui/collapsible";
@@ -220,7 +220,7 @@ export function WelcomeWizard({
           title="Set up CF Code"
           identity={
             <div className="flex items-baseline gap-1.5" role="img" aria-label="CF Code">
-              <T3Wordmark className="h-4 w-auto shrink-0" aria-hidden />
+              <CFWordmark className="h-4 w-auto shrink-0" aria-hidden />
               <span className="text-2xl font-medium tracking-tight text-muted-foreground">
                 Code
               </span>
